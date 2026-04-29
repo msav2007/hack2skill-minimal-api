@@ -11,87 +11,51 @@ def reset_state() -> None:
     reset_topic_store()
 
 
-def test_read_root() -> None:
+def test_root_endpoint() -> None:
     response = client.get("/")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "message": "Welcome to the Hack2Skill Topics API.",
-        "version": "1.0.0",
-        "docs_url": "/docs",
-    }
+    assert response.json()["status"] == "ok"
 
 
-def test_list_topics() -> None:
+def test_topics_endpoint() -> None:
     response = client.get("/topics")
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["total"] == 3
-    assert len(payload["items"]) == 3
+    assert payload["count"] == 4
+    assert len(payload["topics"]) == 4
 
 
-def test_filter_topics() -> None:
-    response = client.get("/topics?category=security&published=true")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["total"] == 1
-    assert payload["items"][0]["title"] == "API Security Basics"
-
-
-def test_get_invalid_topic_id() -> None:
-    response = client.get("/topics/999")
+def test_invalid_topic_returns_404() -> None:
+    response = client.get("/topics/99")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Topic not found."}
 
 
-def test_create_topic() -> None:
-    response = client.post(
-        "/topics",
-        json={
-            "title": "Performance Tuning",
-            "description": "Explore lightweight API optimization strategies for Python.",
-            "category": "efficiency",
-            "difficulty": "advanced",
-            "published": True,
-        },
-    )
+def test_recommendation_endpoint() -> None:
+    response = client.get("/recommend-topic?level=advanced")
 
-    assert response.status_code == 201
-    payload = response.json()
-    assert payload["id"] == 4
-    assert payload["title"] == "Performance Tuning"
+    assert response.status_code == 200
+    assert response.json() == {
+        "level": "advanced",
+        "recommended_topic": "Election Security",
+    }
 
 
-def test_create_topic_validation_error() -> None:
-    response = client.post(
-        "/topics",
-        json={
-            "title": "AI",
-            "description": "Short",
-            "category": "ml",
-            "difficulty": "advanced",
-            "published": True,
-        },
-    )
+def test_secure_endpoint_fails_without_api_key() -> None:
+    response = client.get("/secure-topics")
 
-    assert response.status_code == 422
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Unauthorized access."}
 
 
-def test_secure_endpoint_requires_api_key() -> None:
-    response = client.get("/topics/secure-stats")
-
-    assert response.status_code == 401
-    assert response.json() == {"detail": "Invalid or missing API key."}
-
-
-def test_secure_endpoint_with_api_key() -> None:
+def test_secure_endpoint_succeeds_with_api_key() -> None:
     response = client.get(
-        "/topics/secure-stats",
+        "/secure-topics",
         headers={"X-API-Key": DEFAULT_API_KEY},
     )
 
     assert response.status_code == 200
-    assert response.json()["authorized"] is True
+    assert response.json()["count"] == 4

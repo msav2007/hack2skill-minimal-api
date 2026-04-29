@@ -1,32 +1,41 @@
+"""
+Hack2Skill election education API.
+
+This FastAPI service provides a small backend for managing election topics,
+searching content, protecting sensitive data with an API key, and returning
+smart topic recommendations based on learner level. The intelligent logic maps
+beginner users to Voting Process, intermediate users to EVM, advanced users to
+Election Security, and falls back to General Overview for any other request.
+"""
+
 from os import getenv
 from secrets import compare_digest
-from typing import Annotated, Literal
+from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Path, Query, Request, status
 from pydantic import BaseModel, Field
 
-APP_TITLE = "Hack2Skill Topics API"
-APP_VERSION = "1.0.0"
-API_KEY_HEADER = "X-API-Key"
-DEFAULT_API_KEY = "hack2skill-local-key"
+APP_TITLE = "Hack2Skill Election Topics API"
+APP_DESCRIPTION = "A minimal yet structured FastAPI backend for election learning topics."
+APP_VERSION = "2.0.0"
+API_KEY_NAME = "X-API-Key"
+DEFAULT_API_KEY = "hack2skill-secure-key"
 
 
-class RootResponse(BaseModel):
-    message: str
-    version: str
-    docs_url: str
+class ErrorResponse(BaseModel):
+    detail: str
 
 
 class HealthResponse(BaseModel):
     status: str
+    message: str
+    version: str
 
 
 class TopicBase(BaseModel):
     title: str = Field(..., min_length=3, max_length=80)
-    description: str = Field(..., min_length=10, max_length=500)
+    description: str = Field(..., min_length=10, max_length=300)
     category: str = Field(..., min_length=3, max_length=30)
-    difficulty: Literal["beginner", "intermediate", "advanced"]
-    published: bool = True
 
 
 class TopicCreate(TopicBase):
@@ -38,48 +47,47 @@ class TopicResponse(TopicBase):
 
 
 class TopicListResponse(BaseModel):
-    items: list[TopicResponse]
-    total: int = Field(..., ge=0)
+    topics: list[TopicResponse]
+    count: int = Field(..., ge=0)
 
 
-class SecureStatsResponse(BaseModel):
-    authorized: bool
-    total_topics: int = Field(..., ge=0)
-    api_version: str
+class RecommendationResponse(BaseModel):
+    level: str
+    recommended_topic: str
 
 
 def create_seed_topics() -> list[TopicResponse]:
     return [
         TopicResponse(
             id=1,
-            title="FastAPI Fundamentals",
-            description="Learn how to design clean REST endpoints with FastAPI.",
-            category="backend",
-            difficulty="beginner",
-            published=True,
+            title="Voting Process",
+            description="Understand each step of voting from registration to final counting.",
+            category="basics",
         ),
         TopicResponse(
             id=2,
-            title="API Security Basics",
-            description="Protect services with API keys, validation, and safe defaults.",
-            category="security",
-            difficulty="intermediate",
-            published=True,
+            title="EVM",
+            description="Learn how electronic voting machines work in real election flows.",
+            category="technology",
         ),
         TopicResponse(
             id=3,
-            title="Efficient Testing",
-            description="Write lightweight automated tests for backend reliability.",
-            category="testing",
-            difficulty="beginner",
-            published=False,
+            title="Election Security",
+            description="Explore methods that protect election systems and voter trust.",
+            category="security",
+        ),
+        TopicResponse(
+            id=4,
+            title="General Overview",
+            description="Review the full election process at a high level for any audience.",
+            category="overview",
         ),
     ]
 
 
 app = FastAPI(
     title=APP_TITLE,
-    description="A structured FastAPI backend for managing learning topics.",
+    description=APP_DESCRIPTION,
     version=APP_VERSION,
 )
 
@@ -96,121 +104,117 @@ def get_expected_api_key() -> str:
     return getenv("TOPICS_API_KEY", DEFAULT_API_KEY)
 
 
-def require_api_key(
-    x_api_key: Annotated[str | None, Header(alias=API_KEY_HEADER)] = None,
+def verify_api_key(
+    x_api_key: Annotated[str | None, Header(alias=API_KEY_NAME)] = None,
 ) -> None:
     if x_api_key is None or not compare_digest(x_api_key, get_expected_api_key()):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing API key.",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Unauthorized access.",
         )
 
 
-def get_topic_store(request: Request) -> list[TopicResponse]:
+def get_topics(request: Request) -> list[TopicResponse]:
     return request.app.state.topics
 
 
+def build_topic_list_response(topics: list[TopicResponse]) -> TopicListResponse:
+    return TopicListResponse(topics=topics, count=len(topics))
+
+
 def get_topic_or_404(topic_id: int, request: Request) -> TopicResponse:
-    for topic in get_topic_store(request):
-        if topic.id == topic_id:
-            return topic
+    topic = next((item for item in get_topics(request) if item.id == topic_id), None)
+    if topic is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Topic not found.",
+        )
+    return topic
 
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found.")
+
+def recommend_title(level: str | None) -> str:
+    normalized_level = (level or "").strip().lower()
+    recommendations = {
+        "beginner": "Voting Process",
+        "intermediate": "EVM",
+        "advanced": "Election Security",
+    }
+    return recommendations.get(normalized_level, "General Overview")
 
 
-@app.get("/", response_model=RootResponse)
-def read_root() -> RootResponse:
-    return RootResponse(
-        message="Welcome to the Hack2Skill Topics API.",
+@app.get("/", response_model=HealthResponse)
+def read_root() -> HealthResponse:
+    return HealthResponse(
+        status="ok",
+        message="Hack2Skill election topics API is running.",
         version=APP_VERSION,
-        docs_url="/docs",
     )
-
-
-@app.get("/health", response_model=HealthResponse)
-def health_check() -> HealthResponse:
-    return HealthResponse(status="ok")
 
 
 @app.get("/topics", response_model=TopicListResponse)
-def list_topics(
-    request: Request,
-    search: Annotated[str | None, Query(min_length=1, max_length=50)] = None,
-    category: Annotated[str | None, Query(min_length=3, max_length=30)] = None,
-    difficulty: Annotated[
-        Literal["beginner", "intermediate", "advanced"] | None,
-        Query(),
-    ] = None,
-    published: bool | None = None,
-    limit: Annotated[int, Query(ge=1, le=100)] = 100,
-) -> TopicListResponse:
-    topics: list[TopicResponse] = get_topic_store(request)
-    filtered_topics: list[TopicResponse] = topics
-
-    if search:
-        search_lower = search.lower()
-        filtered_topics = [
-            topic
-            for topic in filtered_topics
-            if search_lower in topic.title.lower()
-            or search_lower in topic.description.lower()
-        ]
-
-    if category:
-        category_lower = category.lower()
-        filtered_topics = [
-            topic for topic in filtered_topics if topic.category.lower() == category_lower
-        ]
-
-    if difficulty:
-        filtered_topics = [
-            topic for topic in filtered_topics if topic.difficulty == difficulty
-        ]
-
-    if published is not None:
-        filtered_topics = [
-            topic for topic in filtered_topics if topic.published == published
-        ]
-
-    limited_topics = filtered_topics[:limit]
-    return TopicListResponse(items=limited_topics, total=len(filtered_topics))
+def list_topics(request: Request) -> TopicListResponse:
+    return build_topic_list_response(get_topics(request))
 
 
-@app.get("/topics/secure-stats", response_model=SecureStatsResponse)
-def get_secure_stats(
-    request: Request,
-    _: None = Depends(require_api_key),
-) -> SecureStatsResponse:
-    return SecureStatsResponse(
-        authorized=True,
-        total_topics=len(get_topic_store(request)),
-        api_version=APP_VERSION,
-    )
-
-
-@app.get("/topics/{topic_id}", response_model=TopicResponse)
-def get_topic(
+@app.get(
+    "/topics/{topic_id}",
+    response_model=TopicResponse,
+    responses={404: {"model": ErrorResponse}},
+)
+def read_topic(
     topic_id: Annotated[int, Path(ge=1)],
     request: Request,
 ) -> TopicResponse:
     return get_topic_or_404(topic_id=topic_id, request=request)
 
 
-@app.post(
-    "/topics",
-    response_model=TopicResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@app.post("/topics", response_model=TopicResponse, status_code=status.HTTP_201_CREATED)
 def create_topic(topic: TopicCreate, request: Request) -> TopicResponse:
-    topics = get_topic_store(request)
+    topics = get_topics(request)
 
-    if any(existing_topic.title.lower() == topic.title.lower() for existing_topic in topics):
+    if any(existing.title.lower() == topic.title.lower() for existing in topics):
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A topic with this title already exists.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Topic title already exists.",
         )
 
     new_topic = TopicResponse(id=request.app.state.next_topic_id, **topic.model_dump())
     topics.append(new_topic)
     request.app.state.next_topic_id += 1
     return new_topic
+
+
+@app.get("/search", response_model=TopicListResponse)
+def search_topics(
+    request: Request,
+    keyword: Annotated[str, Query(min_length=2, max_length=50)],
+) -> TopicListResponse:
+    normalized_keyword = keyword.strip().lower()
+    filtered_topics = [
+        topic
+        for topic in get_topics(request)
+        if normalized_keyword in topic.title.lower()
+        or normalized_keyword in topic.description.lower()
+        or normalized_keyword in topic.category.lower()
+    ]
+    return build_topic_list_response(filtered_topics)
+
+
+@app.get("/recommend-topic", response_model=RecommendationResponse)
+def recommend_topic(level: Annotated[str | None, Query(max_length=20)] = None) -> RecommendationResponse:
+    return RecommendationResponse(
+        level=(level or "default").strip().lower() or "default",
+        recommended_topic=recommend_title(level),
+    )
+
+
+@app.get(
+    "/secure-topics",
+    response_model=TopicListResponse,
+    responses={403: {"model": ErrorResponse}},
+)
+def read_secure_topics(
+    request: Request,
+    _: None = Depends(verify_api_key),
+) -> TopicListResponse:
+    return build_topic_list_response(get_topics(request))

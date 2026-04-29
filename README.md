@@ -1,26 +1,31 @@
-# Hack2Skill Topics API
+# Hack2Skill Election Topics API
 
 ## Project Overview
 
-Hack2Skill Topics API is a production-style FastAPI backend that manages learning topics with validation, filtering, typed responses, and API key protection.
+This project is a minimal FastAPI backend for managing election education topics with validation, secure access control, topic search, and smart topic recommendations.
 
 ## Features
 
-- Structured FastAPI application with metadata and clear response models
-- Input validation using Pydantic field constraints
-- In-memory topic storage for lightweight execution
-- Query-based filtering for search, category, difficulty, and published status
-- Protected endpoint secured with an `X-API-Key` header
-- Automated tests with `pytest` and `TestClient`
+- Structured FastAPI app with metadata and typed response models
+- In-memory topic storage for simple backend evaluation
+- Input validation with Pydantic constraints
+- Clean error handling for missing topics and unauthorized access
+
+## Smart Features
+
+- Recommendation system based on learner level
+- Search filtering with keyword matching
+- Secure endpoint protected by API key header
 
 ## API Endpoints
 
-- `GET /` - API summary and version details
-- `GET /health` - health check endpoint
-- `GET /topics` - list topics with optional filters: `search`, `category`, `difficulty`, `published`, and `limit`
-- `GET /topics/{topic_id}` - fetch a single topic by ID
-- `POST /topics` - create a new topic with validation
-- `GET /topics/secure-stats` - protected topic statistics endpoint
+- `GET /`
+- `GET /topics`
+- `GET /topics/{topic_id}`
+- `POST /topics`
+- `GET /search?keyword=`
+- `GET /recommend-topic?level=`
+- `GET /secure-topics`
 
 ## How to Run
 
@@ -32,15 +37,9 @@ uvicorn main:app --reload
 Run tests with:
 
 ```bash
-pytest
-```
-
-Set an API key before calling the protected endpoint:
-
-```bash
-set TOPICS_API_KEY=hack2skill-local-key
+pytest test_main.py
 ```
 
 ## Deployment Link
 
-[Add your live deployment URL here](https://example.com)
+[Add deployment URL here](https://example.com)
