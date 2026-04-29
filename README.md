@@ -2,20 +2,23 @@
 
 ## Project Overview
 
-This project is a minimal FastAPI backend for managing election education topics with validation, secure access control, topic search, and smart topic recommendations.
+This project is a lightweight FastAPI backend for election education topics with intelligent recommendation logic, secure access, accessibility-focused responses, async support, and simulated search insights.
 
 ## Features
 
-- Structured FastAPI app with metadata and typed response models
-- In-memory topic storage for simple backend evaluation
-- Input validation with Pydantic constraints
-- Clean error handling for missing topics and unauthorized access
+- Structured FastAPI application with typed request and response models
+- In-memory topic storage for fast evaluation and simple deployment
+- Pydantic validation with field constraints
+- API key protection for restricted topic access
+- Built-in logging across endpoints
 
 ## Smart Features
 
-- Recommendation system based on learner level
-- Search filtering with keyword matching
-- Secure endpoint protected by API key header
+- `recommend-topic` decision logic based on learner level
+- `search` filtering for dynamic topic lookup
+- `google-insight` simulation for search-style insight generation
+- `accessible-topics` output for screen-reader-friendly summaries
+- `async-topics` endpoint for async-ready responses
 
 ## API Endpoints
 
@@ -26,6 +29,9 @@ This project is a minimal FastAPI backend for managing election education topics
 - `GET /search?keyword=`
 - `GET /recommend-topic?level=`
 - `GET /secure-topics`
+- `GET /google-insight?query=`
+- `GET /accessible-topics`
+- `GET /async-topics`
 
 ## How to Run
 
